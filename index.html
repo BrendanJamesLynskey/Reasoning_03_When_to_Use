@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reasoning 03 — When to Use Reasoning Models in Production</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0a0a0a;
+            --bg-card: #0d1117;
+            --bg-code: #161b22;
+            --text-primary: #e6edf3;
+            --text-secondary: #8b949e;
+            --accent: #76B900;
+            --accent-dim: #76B90044;
+            --accent-glow: #76B90033;
+            --border: #21262d;
+            --font-display: 'Space Grotesk', sans-serif;
+            --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+            --font-body: 'Inter', sans-serif;
+            --max-width: 900px;
+        }
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        html { scroll-behavior: smooth; }
+        body {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-family: var(--font-body);
+            font-size: 17px;
+            line-height: 1.7;
+            overflow-x: hidden;
+        }
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 2rem 1.5rem;
+            text-align: center;
+            position: relative;
+        }
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%);
+            pointer-events: none;
+            z-index: 0;
+        }
+        .hero > * { position: relative; z-index: 1; }
+        .series-label {
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            color: var(--accent);
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            margin-bottom: 1rem;
+        }
+        .hero h1 {
+            font-family: var(--font-display);
+            font-size: clamp(2rem, 5vw, 3.2rem);
+            font-weight: 700;
+            color: var(--text-primary);
+            line-height: 1.2;
+            margin-bottom: 1rem;
+        }
+        .hero h1 .accent { color: var(--accent); }
+        .hero .subtitle {
+            font-size: 1.1rem;
+            color: var(--text-secondary);
+            max-width: 640px;
+            margin-bottom: 2rem;
+        }
+        .tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            justify-content: center;
+            margin-bottom: 2.5rem;
+        }
+        .tag {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            padding: 0.25rem 0.75rem;
+            border-radius: 999px;
+            border: 1px solid var(--accent);
+            color: var(--accent);
+            background: var(--accent-dim);
+            white-space: nowrap;
+        }
+        .pipeline {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: center;
+            gap: 0.25rem;
+            margin-bottom: 1rem;
+            max-width: var(--max-width);
+        }
+        .pipeline-step {
+            font-family: var(--font-mono);
+            font-size: 0.7rem;
+            padding: 0.3rem 0.7rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            color: var(--text-secondary);
+            white-space: nowrap;
+        }
+        .pipeline-arrow { color: var(--accent); font-size: 0.9rem; font-weight: 700; }
+        .slide {
+            min-height: 100vh;
+            max-width: var(--max-width);
+            margin: 0 auto;
+            padding: 4rem 1.5rem;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        .slide-number {
+            font-family: var(--font-display);
+            font-size: 5rem;
+            font-weight: 700;
+            color: var(--accent-dim);
+            position: absolute;
+            top: 2rem;
+            right: 1.5rem;
+            line-height: 1;
+            user-select: none;
+        }
+        .slide h2 {
+            font-family: var(--font-display);
+            font-size: 1.9rem;
+            font-weight: 700;
+            color: var(--accent);
+            margin-bottom: 1.5rem;
+            line-height: 1.25;
+        }
+        .slide h3 {
+            font-family: var(--font-display);
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-top: 1.5rem;
+            margin-bottom: 0.75rem;
+        }
+        .slide p { margin-bottom: 1rem; color: var(--text-secondary); }
+        .slide p strong { color: var(--text-primary); }
+        .slide ul, .slide ol { margin-bottom: 1rem; padding-left: 1.5rem; color: var(--text-secondary); }
+        .slide li { margin-bottom: 0.4rem; }
+        .slide li strong { color: var(--text-primary); }
+        .slide code {
+            font-family: var(--font-mono);
+            font-size: 0.88em;
+            background: var(--bg-code);
+            border: 1px solid var(--border);
+            padding: 0.05rem 0.35rem;
+            border-radius: 3px;
+            color: #c9d1d9;
+        }
+        .code-block {
+            background: var(--bg-code);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin: 1.25rem 0;
+            overflow: hidden;
+        }
+        .code-header {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            color: var(--accent);
+            background: rgba(118, 185, 0, 0.08);
+            padding: 0.4rem 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+        .code-block pre { margin: 0; padding: 1rem; overflow-x: auto; }
+        .code-block code {
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            line-height: 1.6;
+            color: #c9d1d9;
+            background: transparent;
+            border: none;
+            padding: 0;
+        }
+        .kw { color: #ff7b72; }
+        .fn { color: #d2a8ff; }
+        .str { color: #a5d6ff; }
+        .cm { color: #8b949e; font-style: italic; }
+        .num { color: #79c0ff; }
+        .type { color: #ffa657; }
+        .dir { color: #ff7b72; }
+        .mac { color: #ffa657; }
+        .table-wrap {
+            overflow-x: auto;
+            margin: 1.25rem 0;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+        }
+        table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+        th {
+            background: var(--bg-code);
+            color: var(--accent);
+            font-weight: 600;
+            text-align: left;
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid var(--border);
+            font-family: var(--font-display);
+            white-space: nowrap;
+        }
+        td {
+            padding: 0.6rem 1rem;
+            border-bottom: 1px solid var(--border);
+            color: var(--text-secondary);
+        }
+        tr:last-child td { border-bottom: none; }
+        tr:nth-child(even) td { background: rgba(13, 17, 23, 0.5); }
+        .diagram-flow {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            margin: 1.5rem 0;
+            padding: 1.5rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+        .diagram-box {
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            padding: 0.5rem 1rem;
+            background: var(--bg-code);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-primary);
+            text-align: center;
+            white-space: nowrap;
+        }
+        .diagram-box.accent { border-color: var(--accent); color: var(--accent); background: rgba(118, 185, 0, 0.08); }
+        .diagram-box.dim { color: var(--text-secondary); border-color: var(--border); }
+        .diagram-arrow { color: var(--accent); font-size: 1.3rem; font-weight: 700; }
+        .diagram-vertical {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.3rem;
+            margin: 1.5rem 0;
+            padding: 1.5rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+        .diagram-vertical .diagram-arrow { font-size: 1.1rem; }
+        .hierarchy {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            margin: 1.5rem 0;
+            padding: 1.5rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+        .hierarchy-level { display: flex; align-items: center; gap: 0.75rem; }
+        .hierarchy-label {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            min-width: 80px;
+            text-align: right;
+        }
+        .hierarchy-items { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+        .hierarchy-item {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            padding: 0.3rem 0.6rem;
+            border-radius: 4px;
+            background: var(--bg-code);
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+        }
+        .hierarchy-item.accent { border-color: var(--accent); color: var(--accent); background: rgba(118, 185, 0, 0.08); }
+        .diagram-grid {
+            display: grid;
+            gap: 0.75rem;
+            margin: 1.5rem 0;
+            padding: 1.5rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+        .diagram-grid.cols-2 { grid-template-columns: 1fr 1fr; }
+        .diagram-grid.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+        .diagram-panel {
+            padding: 1rem;
+            background: var(--bg-code);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+        }
+        .diagram-panel.accent-border { border-left: 3px solid var(--accent); }
+        .diagram-panel h4 {
+            font-family: var(--font-display);
+            font-size: 1rem;
+            color: var(--accent);
+            margin-bottom: 0.5rem;
+        }
+        .diagram-panel p, .diagram-panel ul { font-size: 0.85rem; }
+        .callout {
+            background: var(--bg-card);
+            border-left: 3px solid var(--accent);
+            border-radius: 0 8px 8px 0;
+            padding: 1rem 1.25rem;
+            margin: 1.25rem 0;
+        }
+        .callout p { margin-bottom: 0; }
+        .callout p + p { margin-top: 0.5rem; }
+        .callout .callout-label {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            color: var(--accent);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 0.3rem;
+        }
+        .contents-list { list-style: none; padding-left: 0; counter-reset: contents; }
+        .contents-list li {
+            counter-increment: contents;
+            padding: 0.6rem 0;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        .contents-list li:last-child { border-bottom: none; }
+        .contents-list li::before {
+            content: counter(contents, decimal-leading-zero);
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            color: var(--accent);
+            min-width: 2rem;
+        }
+        .contents-list a { color: var(--text-primary); text-decoration: none; transition: color 0.2s; }
+        .contents-list a:hover { color: var(--accent); }
+        .footer {
+            text-align: center;
+            padding: 3rem 1.5rem;
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            border-top: 1px solid var(--border);
+            max-width: var(--max-width);
+            margin: 0 auto;
+        }
+        .footer a { color: var(--accent); text-decoration: none; }
+        .footer a:hover { text-decoration: underline; }
+        .canvas-wrap {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+            margin: 1.25rem 0;
+            overflow-x: auto;
+        }
+        .canvas-wrap canvas, .canvas-wrap svg { display: block; margin: 0 auto; max-width: 100%; }
+        .badge {
+            display: inline-block;
+            font-family: var(--font-mono);
+            font-size: 0.65rem;
+            padding: 0.1rem 0.45rem;
+            border-radius: 999px;
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+            vertical-align: middle;
+            margin-left: 0.3rem;
+        }
+        .badge.ok    { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+        .badge.warn  { border-color: #ffa657; color: #ffa657; background: rgba(255,166,87,0.08); }
+        .badge.bad   { border-color: #ff7b72; color: #ff7b72; background: rgba(255,123,114,0.08); }
+        @media (max-width: 640px) {
+            .slide { padding: 3rem 1rem; min-height: auto; }
+            .slide-number { font-size: 3rem; top: 1.5rem; right: 1rem; }
+            .slide h2 { font-size: 1.5rem; }
+            .diagram-grid.cols-2, .diagram-grid.cols-3 { grid-template-columns: 1fr; }
+            .pipeline { gap: 0.15rem; }
+            .pipeline-step { font-size: 0.6rem; padding: 0.2rem 0.4rem; }
+            .hero h1 { font-size: 1.8rem; }
+            table { font-size: 0.78rem; }
+        }
+    </style>
+</head>
+<body>
+<header class="hero">
+    <div class="series-label">Reasoning Models Series &mdash; Presentation 03</div>
+    <h1>When to Use <span class="accent">Reasoning Models</span> in Production</h1>
+    <p class="subtitle">A decision framework &mdash; reasoning vs frontier+scaffold, cost-per-task comparison, latency budgets, hybrid pipelines, and tool-interleaved long traces.</p>
+
+    <div class="tags">
+        <span class="tag">Decision Framework</span>
+        <span class="tag">Latency Budget</span>
+        <span class="tag">Cost-Per-Task</span>
+        <span class="tag">Hybrid Pipeline</span>
+        <span class="tag">Agentic Tools</span>
+        <span class="tag">Fallback Routing</span>
+    </div>
+
+    <div class="pipeline">
+        <span class="pipeline-step">Task type?</span>
+        <span class="pipeline-arrow">&rarr;</span>
+        <span class="pipeline-step">Latency budget?</span>
+        <span class="pipeline-arrow">&rarr;</span>
+        <span class="pipeline-step">Cost ceiling?</span>
+        <span class="pipeline-arrow">&rarr;</span>
+        <span class="pipeline-step">Fast or slow path?</span>
+        <span class="pipeline-arrow">&rarr;</span>
+        <span class="pipeline-step">Route</span>
+    </div>
+</header>
+
+<section class="slide" id="slide-00">
+    <div class="slide-number">00</div>
+    <h2>Topics We'll Cover</h2>
+    <ul class="contents-list">
+        <li><a href="#slide-01">Reasoning Models vs Frontier + Scaffold</a></li>
+        <li><a href="#slide-02">Cost-Per-Task Comparison</a></li>
+        <li><a href="#slide-03">Latency Budgets &mdash; Where Reasoning Models Fit</a></li>
+        <li><a href="#slide-04">Tasks Where Reasoning Shines</a></li>
+        <li><a href="#slide-05">Tasks Where It Doesn't</a></li>
+        <li><a href="#slide-06">Hybrid Pipelines &mdash; Fast Model with Reasoning Fallback</a></li>
+        <li><a href="#slide-07">Reasoning + Tools &mdash; Long Traces with Tool Calls Interleaved</a></li>
+        <li><a href="#slide-08">The Future Direction</a></li>
+        <li><a href="#slide-09">What to Take Away</a></li>
+    </ul>
+</section>
+
+<section class="slide" id="slide-01">
+    <div class="slide-number">01</div>
+    <h2>Reasoning Models vs Frontier + Scaffold</h2>
+    <p>Before reaching for o3 or DeepSeek-R1, consider whether a frontier chat model with a well-designed scaffold achieves the same result. &ldquo;Scaffold&rdquo; means explicit chain-of-thought prompting, multi-turn self-critique, best-of-N sampling, or a tool loop.</p>
+
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>Dimension</th><th>Reasoning model (e.g. o3-mini)</th><th>Frontier + scaffold (e.g. GPT-4o + CoT)</th></tr></thead>
+            <tbody>
+                <tr><td>Hard maths / proof</td><td><span class="badge ok">Strong</span> intrinsic; no prompt work</td><td><span class="badge warn">Moderate</span>; CoT helps but caps out</td></tr>
+                <tr><td>Latency</td><td><span class="badge bad">60s+</span> for hard problems</td><td><span class="badge ok">&lt;5s</span> for most prompts</td></tr>
+                <tr><td>Cost (hard task)</td><td><span class="badge warn">$0.05&ndash;$1.20</span> per query</td><td><span class="badge ok">$0.01&ndash;$0.10</span> per query</td></tr>
+                <tr><td>Engineering effort</td><td><span class="badge ok">Low</span>; just set effort level</td><td><span class="badge warn">High</span>; prompt + loop logic</td></tr>
+                <tr><td>Instruction following</td><td><span class="badge warn">Moderate</span>; RL biases away from formatting</td><td><span class="badge ok">Strong</span>; RLHF tuned for this</td></tr>
+                <tr><td>Creative / conversational</td><td><span class="badge bad">Weak</span>; reward wasn't aligned here</td><td><span class="badge ok">Strong</span></td></tr>
+                <tr><td>Open-weight option</td><td><span class="badge ok">Yes</span> (DeepSeek-R1 70B)</td><td><span class="badge ok">Yes</span> (Llama-3.1-70B-Instruct)</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="callout">
+        <div class="callout-label">Rule of thumb</div>
+        <p>If greedy-decode GPT-4o with a zero-shot CoT prompt achieves &ge;70% on your target task, a scaffold can likely close the remaining gap more cheaply than switching to a reasoning model. If GPT-4o greedy is below 50%, the task is hard enough that a reasoning model is worth the cost.</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-02">
+    <div class="slide-number">02</div>
+    <h2>Cost-Per-Task Comparison</h2>
+    <p>Cost is a function of prompt length, reasoning token count, and output token count. The following numbers are indicative based on public pricing as of 2025-Q1. Your actual spend will depend on average problem difficulty.</p>
+
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>Task type</th><th>Model choice</th><th>Est. tokens (prompt + reason + output)</th><th>Cost / 1k queries</th></tr></thead>
+            <tbody>
+                <tr><td>Simple Q&amp;A / chat turn</td><td>GPT-4o-mini / Haiku</td><td>200 + 0 + 150</td><td>$0.05&ndash;$0.20</td></tr>
+                <tr><td>Structured extraction</td><td>GPT-4o</td><td>800 + 0 + 300</td><td>$3&ndash;$6</td></tr>
+                <tr><td>Medium coding task</td><td>o3-mini (low effort)</td><td>600 + 1,000 + 500</td><td>$7&ndash;$12</td></tr>
+                <tr><td>Hard algorithm design</td><td>o3-mini (high effort)</td><td>800 + 16,000 + 800</td><td>$70&ndash;$90</td></tr>
+                <tr><td>AIME-level maths</td><td>o3 (high effort)</td><td>500 + 30,000 + 400</td><td>$1,200&ndash;$1,500</td></tr>
+                <tr><td>AIME-level maths (open)</td><td>DeepSeek-R1 API</td><td>500 + 8,000 + 400</td><td>$18&ndash;$25</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="callout">
+        <div class="callout-label">Batching and caching strategies</div>
+        <p><strong>Prompt caching:</strong> If multiple queries share a system prompt or document prefix, cache the KV for that prefix. Anthropic charges $0.30/M cached input tokens (vs $3/M uncached for Sonnet 3.7). For a 2k-token system prompt across 10k queries, caching saves &asymp;$54.</p>
+        <p><strong>Batch API:</strong> OpenAI Batch API gives 50% discount on o-series models with &le;24h SLA. Suitable for offline eval, bulk grading, research pipelines.</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-03">
+    <div class="slide-number">03</div>
+    <h2>Latency Budgets &mdash; Where Reasoning Models Fit</h2>
+    <p>Latency is the sharpest constraint on reasoning-model adoption. Thinking tokens are generated sequentially; no parallelism helps. Budget accordingly before choosing a model for an interactive feature.</p>
+
+    <div class="hierarchy">
+        <div class="hierarchy-level">
+            <div class="hierarchy-label">TTFT &lt;1s</div>
+            <div class="hierarchy-items">
+                <span class="hierarchy-item accent">Haiku 3.5</span>
+                <span class="hierarchy-item accent">GPT-4o-mini</span>
+                <span class="hierarchy-item accent">Gemini 1.5 Flash</span>
+                <span class="hierarchy-item">Chat turns, autocomplete, simple classification</span>
+            </div>
+        </div>
+        <div class="hierarchy-level">
+            <div class="hierarchy-label">TTFT 1&ndash;10s</div>
+            <div class="hierarchy-items">
+                <span class="hierarchy-item accent">GPT-4o</span>
+                <span class="hierarchy-item accent">Claude 3.7 Sonnet (no thinking)</span>
+                <span class="hierarchy-item accent">o3-mini (low effort)</span>
+                <span class="hierarchy-item">Code generation, summarisation, RAG answers</span>
+            </div>
+        </div>
+        <div class="hierarchy-level">
+            <div class="hierarchy-label">TTFT 10&ndash;90s</div>
+            <div class="hierarchy-items">
+                <span class="hierarchy-item accent">o3-mini (high effort)</span>
+                <span class="hierarchy-item accent">Claude 3.7 Sonnet (10k budget)</span>
+                <span class="hierarchy-item accent">DeepSeek-R1 API</span>
+                <span class="hierarchy-item">Hard coding, planning, medium maths</span>
+            </div>
+        </div>
+        <div class="hierarchy-level">
+            <div class="hierarchy-label">TTFT 90s&ndash;10min</div>
+            <div class="hierarchy-items">
+                <span class="hierarchy-item accent">o3 (high effort)</span>
+                <span class="hierarchy-item accent">Claude 3.7 Sonnet (64k budget)</span>
+                <span class="hierarchy-item">AIME-level maths, formal proof, deep agent tasks</span>
+            </div>
+        </div>
+        <div class="hierarchy-level">
+            <div class="hierarchy-label">Async / batch</div>
+            <div class="hierarchy-items">
+                <span class="hierarchy-item accent">Any reasoning model via Batch API</span>
+                <span class="hierarchy-item">Offline eval, research, bulk grading &mdash; no SLA</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="callout">
+        <div class="callout-label">User experience for long waits</div>
+        <p>Stream the visible answer even when thinking tokens are hidden. Display a spinner or progress indicator during the reasoning phase. Expose estimated time via <code>stream_options.include_usage</code> if available. Never leave the user with a blank screen for 2+ minutes &mdash; acknowledge the task and give an ETA.</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-04">
+    <div class="slide-number">04</div>
+    <h2>Tasks Where Reasoning Shines</h2>
+    <p>The defining characteristic of a good reasoning-model task is that the correct answer is: (a) uniquely correct, (b) verifiable, and (c) hard enough that greedy decode fails &gt;30% of the time. These tasks also tend to benefit from planning, self-correction, and exploration of multiple approaches.</p>
+
+    <div class="diagram-grid cols-3">
+        <div class="diagram-panel accent-border">
+            <h4>Competition Maths</h4>
+            <p>AIME, AMC, Olympiad. Single correct numerical answer. o3 at high effort: 87.3% AIME 2024 pass@1. GPT-4o greedy: 9.3%. Lift: &gt;9&times;.</p>
+        </div>
+        <div class="diagram-panel accent-border">
+            <h4>Hard Algorithmic Coding</h4>
+            <p>Codeforces Div1-D/E, LeetCode Hard. o1 reaches 89th percentile Codeforces; GPT-4o 11th. Correctness verified by unit tests. Multiple sub-problems benefit from backtracking.</p>
+        </div>
+        <div class="diagram-panel accent-border">
+            <h4>Formal Proof &amp; Verification</h4>
+            <p>Lean 4 / Isabelle proof generation. Reasoning models discover proof sketches that a greedy model abandons after one failed attempt. ARC-AGI (abstract pattern extrapolation) also fits this regime.</p>
+        </div>
+        <div class="diagram-panel accent-border">
+            <h4>Multi-Step Planning</h4>
+            <p>Long-horizon agent tasks where the plan must be revised mid-execution. Reasoning traces naturally encode plan &rarr; action &rarr; observe &rarr; revise. Reduces number of outer agent loop turns needed.</p>
+        </div>
+        <div class="diagram-panel accent-border">
+            <h4>Scientific / Graduate-Level QA</h4>
+            <p>GPQA Diamond (PhD-level questions): o3-mini 79.7% vs GPT-4o 53.6%. Questions require combining multiple sub-domain facts and holding uncertainty across steps.</p>
+        </div>
+        <div class="diagram-panel accent-border">
+            <h4>Hard Constraint Satisfaction</h4>
+            <p>Scheduling, bin-packing, graph colouring at moderate scale. Model can enumerate and reject infeasible assignments internally. Reduces need for external solvers on small instances.</p>
+        </div>
+    </div>
+</section>
+
+<section class="slide" id="slide-05">
+    <div class="slide-number">05</div>
+    <h2>Tasks Where It Doesn't</h2>
+    <p>Reasoning models incur real costs for their extended thinking &mdash; latency, token spend, and sometimes quality regression. For these task types, a well-tuned frontier chat model reliably wins.</p>
+
+    <div class="diagram-grid cols-2">
+        <div class="diagram-panel accent-border">
+            <h4>Conversational Chat &amp; Customer Support</h4>
+            <p>Tone, empathy, concision, and rapid back-and-forth dominate quality. Reasoning models can over-plan, producing terse or mechanical responses. RLHF-tuned chat models (Claude 3.5 Sonnet, GPT-4o) score higher on MT-Bench and human preference evals.</p>
+        </div>
+        <div class="diagram-panel accent-border">
+            <h4>Simple Code Autocomplete</h4>
+            <p>Single-function completion at the editor cursor. Correct answer is usually obvious from context; a small fast model (Codestral, Haiku) serves &lt;100ms. Waiting 30s for an o3-mini response is a UX failure.</p>
+        </div>
+        <div class="diagram-panel accent-border">
+            <h4>Creative Writing &amp; Poetry</h4>
+            <p>No single correct answer. RL reward signal (correctness) is not defined here. Reasoning models frequently produce stilted, over-structured prose. Prefer Claude 3.5 Sonnet, GPT-4o with a creativity-oriented system prompt.</p>
+        </div>
+        <div class="diagram-panel accent-border">
+            <h4>Factual RAG Retrieval Answers</h4>
+            <p>When retrieved passages contain the answer, a reasoning model adds latency without accuracy gain. The bottleneck is retrieval recall, not reasoning depth. GPT-4o with citations is the right tool.</p>
+        </div>
+    </div>
+
+    <div class="callout">
+        <div class="callout-label">The &ldquo;over-thinking&rdquo; failure mode</div>
+        <p>On simple questions, reasoning models sometimes emit thousands of thinking tokens second-guessing themselves, then produce a worse answer than greedy decode. OpenAI's <code>reasoning_effort: low</code> (or analogous <code>budget_tokens: 512</code> in Anthropic's API) mitigates this. If you observe regressions on easy tasks when switching to a reasoning model, reduce the thinking budget first before abandoning the model class entirely.</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-06">
+    <div class="slide-number">06</div>
+    <h2>Hybrid Pipelines &mdash; Fast Model with Reasoning Fallback</h2>
+    <p>The most production-practical architecture combines a fast cheap model for the common case with a reasoning fallback for hard cases. The challenge is routing: how do you decide which path a query takes?</p>
+
+    <div class="diagram-vertical">
+        <div class="diagram-box">Incoming query</div>
+        <div class="diagram-arrow">&darr;</div>
+        <div class="diagram-box accent">Router (classifier or heuristic)</div>
+        <div class="diagram-arrow">&darr;</div>
+        <div class="diagram-box">Easy? &rarr; <strong>Fast path:</strong> GPT-4o-mini / Haiku, &lt;2s, $0.001</div>
+        <div class="diagram-arrow">&darr; (hard or uncertain)</div>
+        <div class="diagram-box">Confidence check: did fast model self-rate confidence &ge;0.8?</div>
+        <div class="diagram-arrow">&darr; (low confidence)</div>
+        <div class="diagram-box accent">Slow path: o3-mini / Claude 3.7 Sonnet, 30&ndash;90s, $0.05&ndash;$0.20</div>
+        <div class="diagram-arrow">&darr;</div>
+        <div class="diagram-box">Return answer to user</div>
+    </div>
+
+    <h3>Router strategies</h3>
+    <div class="diagram-grid cols-3">
+        <div class="diagram-panel accent-border">
+            <h4>Rule-based routing</h4>
+            <p>Keywords, token count, or task type tag trigger the slow path. Simple, predictable cost. Example: any query containing &ldquo;prove&rdquo;, &ldquo;algorithm complexity&rdquo;, or &ldquo;optimise for&rdquo; &rarr; slow path.</p>
+        </div>
+        <div class="diagram-panel accent-border">
+            <h4>Confidence-based routing</h4>
+            <p>Run fast model first; if its self-rated confidence (in a structured output field) is below threshold, escalate. Cost = fast model always + slow model on escalated fraction.</p>
+        </div>
+        <div class="diagram-panel accent-border">
+            <h4>Small classifier router</h4>
+            <p>Fine-tune a BERT-class model on (query, &ldquo;hard&rdquo;/&ldquo;easy&rdquo;) pairs from historical logs. Adds &lt;50ms latency. RouteLLM (Ong et al., 2024) showed 40% cost reduction with 95% quality retention this way.</p>
+        </div>
+    </div>
+</section>
+
+<section class="slide" id="slide-07">
+    <div class="slide-number">07</div>
+    <h2>Reasoning + Tools &mdash; Long Traces with Tool Calls Interleaved</h2>
+    <p>Modern reasoning model APIs support interleaving thinking blocks with tool use within a single model turn. This is qualitatively different from classic ReAct: the model can think &rarr; call tool &rarr; think about the result &rarr; call another tool, all before emitting any visible content.</p>
+
+    <div class="code-block">
+        <div class="code-header">Anthropic API &mdash; extended thinking + tool use (Claude 3.7 Sonnet)</div>
+<pre><code><span class="kw">import</span> anthropic
+client = anthropic.<span class="type">Anthropic</span>()
+
+tools = [{
+    <span class="str">"name"</span>: <span class="str">"run_python"</span>,
+    <span class="str">"description"</span>: <span class="str">"Execute Python code and return stdout."</span>,
+    <span class="str">"input_schema"</span>: {
+        <span class="str">"type"</span>: <span class="str">"object"</span>,
+        <span class="str">"properties"</span>: {<span class="str">"code"</span>: {<span class="str">"type"</span>: <span class="str">"string"</span>}},
+        <span class="str">"required"</span>: [<span class="str">"code"</span>]
+    }
+}]
+
+resp = client.messages.<span class="fn">create</span>(
+    model=<span class="str">"claude-3-7-sonnet-20250219"</span>,
+    max_tokens=<span class="num">8000</span>,
+    thinking={<span class="str">"type"</span>: <span class="str">"enabled"</span>, <span class="str">"budget_tokens"</span>: <span class="num">5000</span>},
+    tools=tools,
+    messages=[{
+        <span class="str">"role"</span>: <span class="str">"user"</span>,
+        <span class="str">"content"</span>: <span class="str">"Find the smallest prime &gt; 1e9 and verify with a sieve."</span>
+    }]
+)
+<span class="cm"># Response may contain: [ThinkingBlock, ToolUseBlock, ThinkingBlock, TextBlock]</span>
+<span class="kw">for</span> block <span class="kw">in</span> resp.content:
+    <span class="fn">print</span>(block.type, <span class="fn">getattr</span>(block, <span class="str">'text'</span>, <span class="str">''</span>)[:<span class="num">80</span>])</code></pre>
+    </div>
+
+    <div class="callout">
+        <div class="callout-label">Context budget management in tool loops</div>
+        <p>Each tool result appended to the conversation consumes context. With 5k thinking tokens per turn and 2k tool results, a 128k-context model exhausts context in &sim;20 tool turns. Practical mitigations: (1) summarise completed sub-tasks before continuing; (2) limit tool-result verbosity; (3) use a sliding-window that keeps the last N=5 turns; (4) checkpoint the agent state to a database and resume from a fresh context when needed.</p>
+    </div>
+
+    <div class="callout">
+        <div class="callout-label">Thinking blocks must be echoed back</div>
+        <p>In multi-turn agentic conversations with Claude extended thinking, <strong>thinking blocks must be returned verbatim in subsequent user turns</strong> when the model paused mid-generation for a tool call. The API rejects conversations that omit them. This increases per-turn prompt size significantly for long agent sessions.</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-08">
+    <div class="slide-number">08</div>
+    <h2>The Future Direction</h2>
+    <p>Reasoning models in 2025 are still a young paradigm. Several active research and engineering directions will significantly change the deployment picture within 12&ndash;24 months.</p>
+
+    <div class="diagram-grid cols-2">
+        <div class="diagram-panel accent-border">
+            <h4>Faster thinking tokens</h4>
+            <p>Speculative decoding applied to thinking traces. Draft-verify with a small model for the reasoning portion; full model only for the visible answer. Early results show 2&ndash;3&times; latency reduction with &lt;1% accuracy drop. Google DeepMind and Groq are both working in this area.</p>
+        </div>
+        <div class="diagram-panel accent-border">
+            <h4>Compressed / cached traces</h4>
+            <p>Reuse the thinking-token KV cache across turns in an agentic loop. If the context hasn't changed, the model shouldn't re-derive the same sub-conclusions. Prefix caching for reasoning prefixes is already partially available on Anthropic's API.</p>
+        </div>
+        <div class="diagram-panel accent-border">
+            <h4>Smaller reasoning models</h4>
+            <p>DeepSeek-R1 7B and 14B distillations already outperform GPT-4o on MATH. Quantised versions (Q4_K_M via llama.cpp) run on a single A100 at &asymp;40 tok/s. Local deployment of reasoning models is practical today for maths and coding tasks.</p>
+        </div>
+        <div class="diagram-panel accent-border">
+            <h4>Reasoning + retrieval</h4>
+            <p>The model reasons about what to retrieve mid-trace, issues retrieval calls, incorporates results, and revises its understanding &mdash; all before answering. DeepResearch-style agents already exhibit this. The open question is how to bound latency when retrieval is in the critical path of a thinking trace.</p>
+        </div>
+    </div>
+
+    <div class="callout">
+        <div class="callout-label">One trend to watch: reasoning as a training signal</div>
+        <p>Reasoning traces generated by o3/R1 are being used as synthetic training data for the next generation of smaller models. Distillation from thinking traces &mdash; not just answers &mdash; produces models with significantly better reasoning than distillation from answers alone (the &ldquo;process-level distillation&rdquo; approach). This may commoditise medium-hard reasoning within 18 months.</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-09">
+    <div class="slide-number">09</div>
+    <h2>What to Take Away</h2>
+    <ul>
+        <li><strong>Use reasoning models when greedy fails.</strong> The practical threshold: if your best frontier chat model with a CoT prompt scores below &asymp;50% on a task category, switch to a reasoning model. Above 70%, a scaffold is usually cheaper.</li>
+        <li><strong>Match latency budget to product reality.</strong> Interactive features need &lt;10s TTFT &mdash; that rules out o3 at high effort. Batch pipelines, research tools, and async agents have no such constraint. Segment your use cases.</li>
+        <li><strong>Cost grows with difficulty, not just token length.</strong> Hard problems spend 10&ndash;100&times; more reasoning tokens than easy ones. Profile representative queries before committing to per-query pricing. Use <code>reasoning_effort: low</code> as a baseline and promote only where needed.</li>
+        <li><strong>Hybrid routing saves 40&ndash;60% cost with minimal quality loss.</strong> Route easy queries to a fast model; escalate to reasoning only on hard cases. RouteLLM-style classifiers can automate this with &lt;50ms overhead.</li>
+        <li><strong>Tool-interleaved thinking is powerful but context-hungry.</strong> Echo thinking blocks back on every turn; summarise completed sub-tasks; use sliding-window context management for multi-step agents.</li>
+        <li><strong>Open-weight reasoning is viable today.</strong> DeepSeek-R1 70B at Q4 quantisation runs on 2&times;A100 80GB. For maths and coding, it matches o1-level performance at near-zero per-query cost once hardware is amortised.</li>
+    </ul>
+
+    <div class="callout">
+        <div class="callout-label">The decision in one sentence</div>
+        <p>Use a reasoning model when the task is <strong>hard, verifiable, and latency-tolerant</strong>. Use a frontier chat model (with a scaffold if needed) for everything else. Invest in hybrid routing to get the best of both worlds in production.</p>
+    </div>
+</section>
+
+<footer class="footer">
+    <p>Part of the <a href="https://github.com/BrendanJamesLynskey/LLM_Hub_Reasoning">Reasoning Models Series</a></p>
+    <p style="margin-top: 0.5rem; font-size: 0.8rem;"><a href="https://github.com/BrendanJamesLynskey/LLM_Hub_Reasoning">Back to Series Index</a></p>
+</footer>
+<script>
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener('click', function (e) {
+            e.preventDefault();
+            const target = document.querySelector(this.getAttribute('href'));
+            if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+    });
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                entry.target.style.opacity = '1';
+                entry.target.style.transform = 'translateY(0)';
+            }
+        });
+    }, { threshold: 0.1 });
+    document.querySelectorAll('.slide').forEach(slide => {
+        slide.style.opacity = '0';
+        slide.style.transform = 'translateY(30px)';
+        slide.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
+        observer.observe(slide);
+    });
+</script>
+</body>
+</html>
